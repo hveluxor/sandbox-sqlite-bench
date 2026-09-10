@@ -6,6 +6,13 @@
     "memory_gb": 4
   },
   "providers": {
+    "tenki": {
+      "vcpus": 2,
+      "memory_mb": 3910,
+      "python_version": "3.12.3",
+      "sqlite_version": "3.45.1",
+      "notes": "Luxor Tenki Cloud, tenki CLI"
+    },
     "tensorlake": {
       "vcpus": 2,
       "memory_mb": 3940,
@@ -43,6 +50,25 @@
   "results": {
     "default": {
       "description": "WAL mode, synchronous=NORMAL, 64MB cache, 60k rows, 8.68 MB",
+      "tenki": {
+        "total_mean": 4.22,
+        "total_stddev": 0.85,
+        "concurrent_reads_mean": 1.85,
+        "concurrent_reads_qps": 1080,
+        "benchmarks": {
+          "seq_inserts": 0.0845,
+          "batch_inserts": 0.5323,
+          "select_count": 0.0001,
+          "range_queries": 0.1388,
+          "like_queries": 1.2761,
+          "updates": 0.0583,
+          "deletes": 0.0098,
+          "tx_inserts": 0.2223,
+          "aggregates": 0.0464,
+          "join_query": 0.0017,
+          "concurrent_reads": 1.8523
+        }
+      },
       "tensorlake": {
         "total_mean": 2.45,
         "total_stddev": 0.04,
@@ -141,6 +167,25 @@
     },
     "fsync": {
       "description": "synchronous=FULL, DELETE journal mode, 25k rows, 4.05 MB",
+      "tenki": {
+        "total_mean": 2.29,
+        "total_stddev": 0.15,
+        "concurrent_reads_mean": 1.45,
+        "concurrent_reads_qps": 1377,
+        "benchmarks": {
+          "seq_inserts": 0.0768,
+          "batch_inserts": 0.1952,
+          "select_count": 0.0001,
+          "range_queries": 0.0676,
+          "like_queries": 0.2048,
+          "updates": 0.0606,
+          "deletes": 0.0950,
+          "tx_inserts": 0.1122,
+          "aggregates": 0.0208,
+          "join_query": 0.0031,
+          "concurrent_reads": 1.4526
+        }
+      },
       "tensorlake": {
         "total_mean": 1.64,
         "total_stddev": 0.20,
@@ -239,6 +284,25 @@
     },
     "large": {
       "description": "WAL mode, synchronous=NORMAL, 8MB cache, 250k rows, 34.85 MB",
+      "tenki": {
+        "total_mean": 16.82,
+        "total_stddev": 0.72,
+        "concurrent_reads_mean": 1.55,
+        "concurrent_reads_qps": 1287,
+        "benchmarks": {
+          "seq_inserts": 0.5251,
+          "batch_inserts": 1.8649,
+          "select_count": 0.0007,
+          "range_queries": 0.4700,
+          "like_queries": 10.9794,
+          "updates": 0.3938,
+          "deletes": 0.5519,
+          "tx_inserts": 0.3428,
+          "aggregates": 0.1347,
+          "join_query": 0.0060,
+          "concurrent_reads": 1.5544
+        }
+      },
       "tensorlake": {
         "total_mean": 9.45,
         "total_stddev": 0.10,
