@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate benchmark_chart.png from results/results.json.
 
-Renders one horizontal bar panel per mode (default, fsync, large), each
-ranking providers by mean total time (fastest on top). Run after updating
-results.json with new provider numbers.
+Renders a 2x2 grid: total time for the default, fsync and large modes, plus
+default-mode concurrent read throughput. Providers keep a fixed order (default
+mode ranking) across all panels.
 
 Usage:
   python generate_chart.py            # -> benchmark_chart.png
@@ -21,53 +21,62 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).parent
 RESULTS = ROOT / "results" / "results.json"
 
-# Stable per-provider colors; Tenki highlighted.
-COLORS = {
-    "tenki": "#e8590c",
-    "tensorlake": "#1c7ed6",
-    "vercel": "#495057",
-    "e2b": "#37b24d",
-    "modal": "#ae3ec9",
-    "daytona": "#f08c00",
+LABELS = {
+    "tensorlake": "Tensorlake",
+    "vercel": "Vercel",
+    "e2b": "E2B",
+    "modal": "Modal",
+    "daytona": "Daytona",
+    "tenki": "Tenki",
 }
-DEFAULT_COLOR = "#868e96"
+COLORS = {
+    "tensorlake": "#2563eb",
+    "vercel": "#171717",
+    "e2b": "#f59e0b",
+    "modal": "#10b981",
+    "daytona": "#6366f1",
+    "tenki": "#06b6d4",
+}
+DEFAULT_COLOR = "#94a3b8"
 
-MODE_ORDER = ["default", "fsync", "large"]
+BG = "#0f172a"
+PANEL = "#1e293b"
+GRID = "#334155"
+TEXT = "#f1f5f9"
+MUTED = "#94a3b8"
+ERR = "#64748b"
 
 
-def load():
-    with open(RESULTS) as f:
-        return json.load(f)
-
-
-def panel(ax, mode_key, mode_data):
-    providers = [p for p in mode_data if p != "description"]
-    ranked = sorted(providers, key=lambda p: mode_data[p]["total_mean"])
-    # Fastest on top: reverse for barh (which plots bottom-up).
-    ranked = ranked[::-1]
-
-    labels = [p.capitalize() for p in ranked]
-    values = [mode_data[p]["total_mean"] for p in ranked]
-    errs = [mode_data[p].get("total_stddev", 0) for p in ranked]
-    colors = [COLORS.get(p, DEFAULT_COLOR) for p in ranked]
-
-    y = range(len(ranked))
-    ax.barh(y, values, xerr=errs, color=colors, height=0.62,
-            error_kw={"ecolor": "#adb5bd", "capsize": 3, "elinewidth": 1})
-    ax.set_yticks(list(y))
-    ax.set_yticklabels(labels, fontsize=10)
-    ax.set_xlabel("Total time (s) — lower is better", fontsize=9)
-    ax.set_title(mode_data.get("description", mode_key), fontsize=10, pad=8)
-    ax.grid(axis="x", color="#e9ecef", linewidth=0.8, zorder=0)
+def style(ax, title, ylabel):
+    ax.set_facecolor(PANEL)
+    ax.set_title(title, color=TEXT, fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel(ylabel, color=MUTED, fontsize=11)
+    ax.tick_params(colors=MUTED, labelsize=10)
+    ax.grid(axis="y", color=GRID, linewidth=0.6)
     ax.set_axisbelow(True)
-    for spine in ("top", "right"):
-        ax.spines[spine].set_visible(False)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(GRID)
 
-    xmax = max(v + e for v, e in zip(values, errs))
-    ax.set_xlim(0, xmax * 1.18)
-    for yi, (v, e) in enumerate(zip(values, errs)):
-        ax.text(v + e + xmax * 0.015, yi, f"{v:.2f}s",
-                va="center", fontsize=9, color="#212529")
+
+def bars(ax, providers, values, errs, fmt):
+    x = range(len(providers))
+    ax.bar(
+        x,
+        values,
+        yerr=errs if any(errs) else None,
+        width=0.65,
+        color=[COLORS.get(p, DEFAULT_COLOR) for p in providers],
+        error_kw={"ecolor": ERR, "capsize": 5, "elinewidth": 1.5},
+    )
+    ax.set_xticks(list(x))
+    ax.set_xticklabels([LABELS.get(p, p) for p in providers])
+    top = max(v + e for v, e in zip(values, errs))
+    ax.set_ylim(0, top * 1.12)
+    for xi, v, e in zip(x, values, errs):
+        ax.text(xi, v + e + top * 0.015, fmt(v), ha="center", va="bottom",
+                color=TEXT, fontsize=11, fontweight="bold")
 
 
 def main():
@@ -75,28 +84,54 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "benchmark_chart.png"))
     args = ap.parse_args()
 
-    data = load()
+    with open(RESULTS) as f:
+        data = json.load(f)
     results = data["results"]
-    modes = [m for m in MODE_ORDER if m in results]
+    default = results["default"]
+    providers = sorted(
+        (p for p in default if p != "description"),
+        key=lambda p: default[p]["total_mean"],
+    )
 
-    fig, axes = plt.subplots(len(modes), 1, figsize=(9, 4.2 * len(modes)))
-    if len(modes) == 1:
-        axes = [axes]
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10), facecolor=BG)
+    cfg = data["config"]
+    fig.suptitle(
+        f"SQLite Benchmark: Sandbox Providers ({cfg['vcpus']} vCPU / "
+        f"{cfg['memory_gb']} GB, {cfg['iterations']} iterations)",
+        color=TEXT, fontsize=16, fontweight="bold", y=0.97,
+    )
+    fig.text(0.5, 0.905, "Lower is better (except concurrent reads: higher is better)",
+             ha="center", color=MUTED, fontsize=11)
 
-    n_providers = len({p for m in modes for p in results[m] if p != "description"})
-    fig.suptitle("SQLite Performance Across Sandbox Providers",
-                 fontsize=15, fontweight="bold", y=0.995)
-    fig.text(0.5, 0.965,
-             f"{n_providers} providers · 2 vCPU / 4 GB · "
-             f"{data['config']['iterations']} iterations (mean ± stddev)",
-             ha="center", fontsize=10, color="#495057")
+    panels = [
+        ("default", "Default (WAL, 60k rows)", lambda v: f"{v:.2f}s"),
+        ("fsync", "Fsync (sync=FULL, no WAL)", lambda v: f"{v:.2f}s"),
+        ("large", "Large (250k rows, 8MB cache)", lambda v: f"{v:.1f}s"),
+    ]
+    for ax, (mode, title, fmt) in zip(axes.flat, panels):
+        style(ax, title, "Total time (s)")
+        mode_data = results[mode]
+        bars(
+            ax,
+            providers,
+            [mode_data[p]["total_mean"] for p in providers],
+            [mode_data[p].get("total_stddev", 0) for p in providers],
+            fmt,
+        )
 
-    for ax, mode in zip(axes, modes):
-        panel(ax, mode, results[mode])
+    ax = axes.flat[3]
+    style(ax, "Concurrent Reads (4 threads)", "Queries/sec")
+    bars(
+        ax,
+        providers,
+        [default[p]["concurrent_reads_qps"] for p in providers],
+        [0] * len(providers),
+        lambda v: f"{v:.0f}",
+    )
 
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.subplots_adjust(hspace=0.32)
-    fig.savefig(args.out, dpi=150, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.06, right=0.97, top=0.82, bottom=0.06,
+                        hspace=0.35, wspace=0.25)
+    fig.savefig(args.out, dpi=200, facecolor=BG)
     print(f"Wrote {args.out}")
 
 
